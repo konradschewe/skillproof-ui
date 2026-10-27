@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { SM } from "../constants";
 import { AppShell } from "../components/AppShell";
-import { Breadcrumb } from "../components/Breadcrumb";
 import { RepoFilter } from "../components/RepoFilter";
 import { SkillFilter } from "../components/SkillFilter";
 import { CoverageRing } from "../components/DonutChart";
@@ -70,8 +69,6 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
 
   return (
     <AppShell>
-      <Breadcrumb crumbs={[{ label: "Hub" }]} />
-
       {/* Title + filter toggle */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".75rem", flexWrap: "wrap", gap: ".5rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Hub</h1>

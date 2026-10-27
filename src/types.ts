@@ -1,10 +1,26 @@
 export type AdoptionStatus = "adopted" | "divergent" | "partial" | "missing" | "not-applicable";
 
+export interface AgentMetrics {
+  llmCalls?: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens?: number;
+  cacheWriteTokens?: number;
+}
+
+export interface EvaluationMetrics {
+  durationMs: number;
+  estimatedCostUsd: number;
+  evaluator: AgentMetrics;
+  explorer: AgentMetrics;
+}
+
 export interface SkillEvaluationResult {
   skillName: string;
   status: AdoptionStatus;
   reasoning: string;
   evidence: string[];
+  metrics?: EvaluationMetrics;
 }
 
 export interface EvaluationReport {

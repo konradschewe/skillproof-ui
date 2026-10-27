@@ -23,7 +23,7 @@ export function App() {
       return (
         <SingleRepo
           report={selected.report}
-          breadcrumb={{ label: "← Hub", onClick: () => setSelected(null) }}
+          breadcrumb={{ label: "Hub", onClick: () => setSelected(null) }}
           repoUrl={selected.repoUrl}
         />
       );
