@@ -57,9 +57,10 @@ export function HistoryTimeline({ history, skills }: { history: HistoryEntry[]; 
           {skills.map((skill) => (
             <tr key={skill}>
               <td style={{ padding: ".2rem 1rem .2rem 0", color: "var(--text-2)", fontWeight: 500 }}>{skill}</td>
-              {entries.map((e, i) => (
-                <Cell key={i} status={e.skills[skill] as AdoptionStatus | undefined} date={e.evaluatedAt} />
-              ))}
+              {entries.map((e, i) => {
+                const r = e.results.find((x) => x.skillName === skill);
+                return <Cell key={i} status={r?.status as AdoptionStatus | undefined} date={e.evaluatedAt} />;
+              })}
             </tr>
           ))}
         </tbody>

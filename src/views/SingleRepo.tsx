@@ -3,6 +3,7 @@ import { S_ORDER, SM } from "../constants";
 import { AppShell } from "../components/AppShell";
 import { CoverageRing } from "../components/DonutChart";
 import { CoverageChart } from "../components/CoverageChart";
+import { SkillFilter } from "../components/SkillFilter";
 import { coveragePct } from "../utils";
 import type { HistoryEntry, SkillEvaluationResult } from "../types";
 
@@ -33,11 +34,14 @@ function cutoffForRange(range: TimeRange): string | null {
 export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
-  const [selectedIso, setSelectedIso] = useState<string | null>(null); // null = latest
+  const [selectedIso, setSelectedIso] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const [skillFilterOpen, setSkillFilterOpen] = useState(false);
 
   const sortedHistory = [...history].sort((a, b) => a.evaluatedAt.localeCompare(b.evaluatedAt));
   const latestEntry = sortedHistory[sortedHistory.length - 1];
+  const allSkillNames = latestEntry.results.map((r) => r.skillName);
+  const [selectedSkillNames, setSelectedSkillNames] = useState<Set<string>>(new Set(allSkillNames));
 
   const cutoff = cutoffForRange(timeRange);
   const visibleHistory = cutoff
@@ -61,7 +65,17 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
 
   const isLatest = activeEntry.evaluatedAt === latestEntry.evaluatedAt;
 
-  const activeResults: SkillEvaluationResult[] = activeEntry.results;
+  // Chart points: coverage over time, filtered by selected skills
+  const chartPoints = visibleHistory.map((e) => ({
+    date: e.evaluatedAt,
+    pct: coveragePct(e.results.filter((r) => selectedSkillNames.has(r.skillName))),
+  }));
+
+  // Active results filtered by skill selection
+  const activeResults: SkillEvaluationResult[] = activeEntry.results.filter((r) =>
+    selectedSkillNames.has(r.skillName)
+  );
+
   const repoName = repoPath.split("/").pop() ?? repoPath;
   const activeDate = new Date(activeEntry.evaluatedAt).toLocaleString("en-US", {
     dateStyle: "medium", timeStyle: "short",
@@ -89,6 +103,8 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
       (filter === "all" || r.status === filter) &&
       (!search || r.skillName.toLowerCase().includes(search.toLowerCase())),
   );
+
+  const skillBadge = allSkillNames.length - selectedSkillNames.size;
 
   return (
     <AppShell>
@@ -124,7 +140,7 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
         )}
       </p>
 
-      {/* Coverage chart — only shown when there are multiple runs */}
+      {/* Coverage chart */}
       {sortedHistory.length > 1 && (
         <div style={{
           background: "var(--surface)", border: "1px solid var(--border)",
@@ -134,32 +150,27 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".25rem" }}>
             <span style={{ fontSize: ".6rem", color: "var(--text-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".07em" }}>
               Coverage · {visibleHistory.length} runs
+              {skillBadge > 0 && <span style={{ marginLeft: ".35rem", color: "var(--partial-c)" }}>· {selectedSkillNames.size} skills</span>}
             </span>
             <div style={{ display: "flex", gap: ".2rem" }}>
               {RANGE_PILLS.map((r) => (
-                <button
-                  key={r}
-                  onClick={() => changeRange(r)}
-                  style={{
-                    background: timeRange === r ? "var(--text)" : "none",
-                    color: timeRange === r ? "var(--bg)" : "var(--text-subtle)",
-                    border: "1px solid var(--border)",
-                    borderRadius: "3px",
-                    padding: "1px 5px",
-                    fontSize: ".58rem",
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    lineHeight: 1.4,
-                  }}
-                >
+                <button key={r} onClick={() => changeRange(r)} style={{
+                  background: timeRange === r ? "var(--text)" : "none",
+                  color: timeRange === r ? "var(--bg)" : "var(--text-subtle)",
+                  border: "1px solid var(--border)", borderRadius: "3px",
+                  padding: "1px 5px", fontSize: ".58rem", cursor: "pointer",
+                  fontFamily: "inherit", lineHeight: 1.4,
+                }}>
                   {r}
                 </button>
               ))}
             </div>
           </div>
           <CoverageChart
-            history={visibleHistory}
-            selectedIso={selectedIso}
+            points={chartPoints}
+            height={80}
+            latestDate={latestEntry.evaluatedAt}
+            selectedDate={selectedIso}
             onSelect={selectRun}
           />
           {!isLatest && (
@@ -186,12 +197,8 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
             {(["adopted", "divergent", "partial", "missing"] as const).map((s) => (
               counts[s] > 0 || s === "adopted" || s === "missing" ? (
                 <div key={s} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "1.25rem", fontWeight: 700, lineHeight: 1, color: `var(--${s}-c)` }}>
-                    {counts[s]}
-                  </div>
-                  <div style={{ fontSize: ".62rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: ".06em", marginTop: ".2rem" }}>
-                    {SM[s].label}
-                  </div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 700, lineHeight: 1, color: `var(--${s}-c)` }}>{counts[s]}</div>
+                  <div style={{ fontSize: ".62rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: ".06em", marginTop: ".2rem" }}>{SM[s].label}</div>
                 </div>
               ) : null
             ))}
@@ -243,7 +250,22 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
         </details>
       )}
 
-      {/* Filter row */}
+      {/* Skill filter panel */}
+      {allSkillNames.length > 1 && skillFilterOpen && (
+        <div style={{
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: "var(--r)", padding: ".75rem 1rem",
+          marginBottom: ".75rem", boxShadow: "var(--sh)",
+        }}>
+          <SkillFilter
+            allSkills={allSkillNames}
+            selected={selectedSkillNames}
+            onChange={setSelectedSkillNames}
+          />
+        </div>
+      )}
+
+      {/* Status filter + search row */}
       <div style={{ display: "flex", gap: ".4rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button className={`fbtn${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>
           All ({total})
@@ -253,6 +275,18 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
             {SM[s].icon} {SM[s].label} ({counts[s]})
           </button>
         ))}
+        {allSkillNames.length > 1 && (
+          <button
+            className={`fbtn${skillFilterOpen ? " on" : ""}`}
+            onClick={() => setSkillFilterOpen((v) => !v)}
+            style={{ display: "flex", alignItems: "center", gap: ".3rem" }}
+          >
+            Skills
+            {skillBadge > 0 && (
+              <span className="skill-badge">{skillBadge} hidden</span>
+            )}
+          </button>
+        )}
         <div className="search" style={{ marginLeft: "auto" }}>
           <svg className="search-ico" viewBox="0 0 16 16" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={1.8}>
             <circle cx={6.5} cy={6.5} r={4.5} />
@@ -273,10 +307,7 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
         <p style={{ color: "var(--text-muted)", padding: "1.5rem 0" }}>No skills match the current filter.</p>
       )}
       {visibleResults.map((r, i) => (
-        <div
-          key={r.skillName}
-          className="card"
-          data-s={r.status}
+        <div key={r.skillName} className="card" data-s={r.status}
           style={{ animationDelay: `${(i * 0.025).toFixed(3)}s` }}
         >
           <div className="card-hdr">
@@ -291,11 +322,9 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
               <ul className="ev-list">
                 {r.evidence.map((e, j) => {
                   const m = e.match(/^([\w./\-]+\.[a-zA-Z]+(?:\s+lines?\s+[\d\-,]+)?):?\s*(.*)/);
-                  return m ? (
-                    <li key={j} className="ev-item"><span className="ev-file">{m[1]}</span>{m[2] ? ` ${m[2]}` : ""}</li>
-                  ) : (
-                    <li key={j} className="ev-item">{e}</li>
-                  );
+                  return m
+                    ? <li key={j} className="ev-item"><span className="ev-file">{m[1]}</span>{m[2] ? ` ${m[2]}` : ""}</li>
+                    : <li key={j} className="ev-item">{e}</li>;
                 })}
               </ul>
             </details>

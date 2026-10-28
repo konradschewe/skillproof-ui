@@ -4,9 +4,19 @@ import { AppShell } from "../components/AppShell";
 import { RepoFilter } from "../components/RepoFilter";
 import { SkillFilter } from "../components/SkillFilter";
 import { CoverageRing } from "../components/DonutChart";
+import { CoverageChart } from "../components/CoverageChart";
 import { Sparkline } from "../components/Sparkline";
 import type { HubResult, HistoryEntry } from "../types";
-import { relativeTime } from "../utils";
+import { relativeTime, computeAggregateTimeline } from "../utils";
+
+type TimeRange = "1m" | "3m" | "1y" | "all";
+const RANGE_PILLS: TimeRange[] = ["1m", "3m", "1y", "all"];
+
+function cutoffForRange(range: TimeRange): string | null {
+  if (range === "all") return null;
+  const days = range === "1m" ? 30 : range === "3m" ? 90 : 365;
+  return new Date(Date.now() - days * 86400_000).toISOString();
+}
 
 function latest(r: HubResult): HistoryEntry {
   return r.history[r.history.length - 1];
@@ -52,6 +62,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
   const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set(allRepos));
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set(skills));
   const [filterOpen, setFilterOpen] = useState(false);
+  const [timeRange, setTimeRange] = useState<TimeRange>("all");
 
   const visibleSkills = skills.filter((s) => selectedSkills.has(s));
   const visibleRepos = results
@@ -128,6 +139,40 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
           <CoverageRing pct={avgPct} />
         </span>
       </div>
+
+      {/* Aggregate coverage chart */}
+      {(() => {
+        const cutoff = cutoffForRange(timeRange);
+        const chartPoints = computeAggregateTimeline(visibleRepos, visibleSkills, cutoff);
+        if (chartPoints.length < 2) return null;
+        return (
+          <div style={{
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: "var(--r)", padding: ".4rem .75rem",
+            marginBottom: "1rem", boxShadow: "var(--sh)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".25rem" }}>
+              <span style={{ fontSize: ".6rem", color: "var(--text-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".07em" }}>
+                Coverage trend · {visibleRepos.length} repos · {visibleSkills.length} skills
+              </span>
+              <div style={{ display: "flex", gap: ".2rem" }}>
+                {RANGE_PILLS.map((r) => (
+                  <button key={r} onClick={() => setTimeRange(r)} style={{
+                    background: timeRange === r ? "var(--text)" : "none",
+                    color: timeRange === r ? "var(--bg)" : "var(--text-subtle)",
+                    border: "1px solid var(--border)", borderRadius: "3px",
+                    padding: "1px 5px", fontSize: ".58rem", cursor: "pointer",
+                    fontFamily: "inherit", lineHeight: 1.4,
+                  }}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <CoverageChart points={chartPoints} height={80} />
+          </div>
+        );
+      })()}
 
       {visibleRepos.length === 0 ? (
         <p style={{ color: "var(--text-muted)", padding: "1.5rem 0" }}>
