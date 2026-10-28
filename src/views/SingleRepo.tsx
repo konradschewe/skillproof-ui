@@ -2,10 +2,14 @@ import { useState } from "react";
 import { S_ORDER, SM } from "../constants";
 import { AppShell } from "../components/AppShell";
 import { CoverageRing } from "../components/DonutChart";
-import type { EvaluationReport } from "../types";
+import { CoverageChart } from "../components/CoverageChart";
+import { SkillFilter } from "../components/SkillFilter";
+import { coveragePct } from "../utils";
+import type { HistoryEntry, SkillEvaluationResult } from "../types";
 
 interface Props {
-  report: EvaluationReport;
+  repoPath: string;
+  history: HistoryEntry[]; // sorted oldest → newest; latest = last entry
   breadcrumb?: { label: string; onClick: () => void };
   repoUrl?: string;
 }
@@ -18,37 +22,92 @@ const STATUS_DEFS: Record<string, string> = {
   "not-applicable": "The skill is intentionally irrelevant to this repository",
 };
 
-export function SingleRepo({ report, breadcrumb, repoUrl }: Props) {
+type TimeRange = "1m" | "3m" | "1y" | "all";
+const RANGE_PILLS: TimeRange[] = ["1m", "3m", "1y", "all"];
+
+function cutoffForRange(range: TimeRange): string | null {
+  if (range === "all") return null;
+  const days = range === "1m" ? 30 : range === "3m" ? 90 : 365;
+  return new Date(Date.now() - days * 86400_000).toISOString();
+}
+
+export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
+  const [selectedIso, setSelectedIso] = useState<string | null>(null);
+  const [timeRange, setTimeRange] = useState<TimeRange>("all");
+  const [skillFilterOpen, setSkillFilterOpen] = useState(false);
 
-  const repoName = report.repoPath.split("/").pop() ?? report.repoPath;
-  const date = new Date(report.evaluatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  const sortedHistory = [...history].sort((a, b) => a.evaluatedAt.localeCompare(b.evaluatedAt));
+  const latestEntry = sortedHistory[sortedHistory.length - 1];
+  const allSkillNames = latestEntry.results.map((r) => r.skillName);
+  const [selectedSkillNames, setSelectedSkillNames] = useState<Set<string>>(new Set(allSkillNames));
+
+  const cutoff = cutoffForRange(timeRange);
+  const visibleHistory = cutoff
+    ? sortedHistory.filter((e) => e.evaluatedAt >= cutoff)
+    : sortedHistory;
+
+  function selectRun(iso: string | null) {
+    setSelectedIso(iso);
+    setFilter("all");
+  }
+
+  function changeRange(range: TimeRange) {
+    setTimeRange(range);
+    setSelectedIso(null);
+    setFilter("all");
+  }
+
+  const activeEntry: HistoryEntry =
+    (selectedIso ? sortedHistory.find((e) => e.evaluatedAt === selectedIso) : undefined)
+    ?? latestEntry;
+
+  const isLatest = activeEntry.evaluatedAt === latestEntry.evaluatedAt;
+
+  // Chart points: coverage over time, filtered by selected skills
+  const chartPoints = visibleHistory.map((e) => ({
+    date: e.evaluatedAt,
+    pct: coveragePct(e.results.filter((r) => selectedSkillNames.has(r.skillName))),
+  }));
+
+  // Active results filtered by skill selection
+  const activeResults: SkillEvaluationResult[] = activeEntry.results.filter((r) =>
+    selectedSkillNames.has(r.skillName)
+  );
+
+  const repoName = repoPath.split("/").pop() ?? repoPath;
+  const activeDate = new Date(activeEntry.evaluatedAt).toLocaleString("en-US", {
+    dateStyle: "medium", timeStyle: "short",
+  });
 
   const counts = Object.fromEntries(
-    S_ORDER.map((s) => [s, report.results.filter((r) => r.status === s).length]),
+    S_ORDER.map((s) => [s, activeResults.filter((r) => r.status === s).length]),
   ) as Record<string, number>;
-  const total = report.results.length;
+  const total = activeResults.length;
   const scored = total - (counts["not-applicable"] || 0);
-  const pct = scored > 0 ? Math.round(((counts.adopted ?? 0) + (counts.divergent ?? 0)) / scored * 100) : 0;
+  const pct = scored > 0
+    ? Math.round(((counts.adopted ?? 0) + (counts.divergent ?? 0)) / scored * 100)
+    : 0;
 
-  const withMetrics = report.results.filter((r) => r.metrics);
-  const cached = report.results.length - withMetrics.length;
+  const withMetrics = activeResults.filter((r) => r.metrics);
+  const cachedCount = activeResults.length - withMetrics.length;
   const metrics = withMetrics.length > 0 ? {
     tokens: withMetrics.reduce((a, r) => a + r.metrics!.evaluator.inputTokens + r.metrics!.evaluator.outputTokens + r.metrics!.explorer.inputTokens + r.metrics!.explorer.outputTokens, 0),
     cost:   withMetrics.reduce((a, r) => a + r.metrics!.estimatedCostUsd, 0),
     ms:     withMetrics.reduce((a, r) => a + r.metrics!.durationMs, 0),
   } : null;
 
-  const visibleResults = report.results.filter(
+  const visibleResults = activeResults.filter(
     (r) =>
       (filter === "all" || r.status === filter) &&
       (!search || r.skillName.toLowerCase().includes(search.toLowerCase())),
   );
 
+  const skillBadge = allSkillNames.length - selectedSkillNames.size;
+
   return (
     <AppShell>
-      {/* Back navigation */}
       {breadcrumb && (
         <button
           onClick={breadcrumb.onClick}
@@ -58,19 +117,99 @@ export function SingleRepo({ report, breadcrumb, repoUrl }: Props) {
         </button>
       )}
 
-      {/* Title row */}
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: ".25rem", gap: "1rem", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".25rem", gap: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{repoName}</h1>
-        {repoUrl && (
-          <a href={repoUrl} target="_blank" rel="noreferrer"
-            style={{ fontSize: ".78rem", color: "var(--text-muted)", textDecoration: "none", flexShrink: 0 }}>
-            ↗ GitHub
-          </a>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: ".5rem", flexShrink: 0 }}>
+          {allSkillNames.length > 1 && (
+            <button
+              className={`fbtn${skillFilterOpen ? " on" : ""}`}
+              onClick={() => setSkillFilterOpen((v) => !v)}
+              style={{ display: "flex", alignItems: "center", gap: ".3rem" }}
+            >
+              Skills
+              {skillBadge > 0 && <span className="skill-badge">{skillBadge} hidden</span>}
+              <span style={{ fontSize: ".6rem", opacity: .6 }}>{skillFilterOpen ? "▲" : "▼"}</span>
+            </button>
+          )}
+          {repoUrl && (
+            <a href={repoUrl} target="_blank" rel="noreferrer"
+              style={{ fontSize: ".78rem", color: "var(--text-muted)", textDecoration: "none" }}>
+              ↗ GitHub
+            </a>
+          )}
+        </div>
       </div>
-      <p style={{ fontSize: ".78rem", color: "var(--text-muted)", marginBottom: "1.25rem" }}>
-        {report.repoPath} · {date}
+      <p style={{ fontSize: ".78rem", color: "var(--text-muted)", marginBottom: ".75rem" }}>
+        {repoPath} · {activeDate}
+        {activeEntry.sha && (
+          <span style={{ fontFamily: "monospace", marginLeft: ".5rem", color: "var(--text-subtle)" }}>
+            {activeEntry.sha.slice(0, 7)}
+          </span>
+        )}
+        {activeEntry.ref && (
+          <span style={{ marginLeft: ".35rem", color: "var(--text-subtle)" }}>
+            ({activeEntry.ref})
+          </span>
+        )}
       </p>
+
+      {/* Skill filter panel — at top because it affects chart + all aggregations */}
+      {allSkillNames.length > 1 && skillFilterOpen && (
+        <div style={{
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: "var(--r)", padding: ".75rem 1rem",
+          marginBottom: "1rem", boxShadow: "var(--sh)",
+        }}>
+          <SkillFilter
+            allSkills={allSkillNames}
+            selected={selectedSkillNames}
+            onChange={setSelectedSkillNames}
+          />
+        </div>
+      )}
+
+      {/* Coverage chart */}
+      {sortedHistory.length > 1 && (
+        <div style={{
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: "var(--r)", padding: ".4rem .75rem",
+          marginBottom: "1rem", boxShadow: "var(--sh)",
+        }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".25rem" }}>
+            <span style={{ fontSize: ".6rem", color: "var(--text-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".07em" }}>
+              Coverage · {visibleHistory.length} runs
+              {skillBadge > 0 && <span style={{ marginLeft: ".35rem", color: "var(--partial-c)" }}>· {selectedSkillNames.size} skills</span>}
+            </span>
+            <div style={{ display: "flex", gap: ".2rem" }}>
+              {RANGE_PILLS.map((r) => (
+                <button key={r} onClick={() => changeRange(r)} style={{
+                  background: timeRange === r ? "var(--text)" : "none",
+                  color: timeRange === r ? "var(--bg)" : "var(--text-subtle)",
+                  border: "1px solid var(--border)", borderRadius: "3px",
+                  padding: "1px 5px", fontSize: ".58rem", cursor: "pointer",
+                  fontFamily: "inherit", lineHeight: 1.4,
+                }}>
+                  {r}
+                </button>
+              ))}
+            </div>
+          </div>
+          <CoverageChart
+            points={chartPoints}
+            latestDate={latestEntry.evaluatedAt}
+            selectedDate={selectedIso}
+            onSelect={selectRun}
+          />
+          {!isLatest && (
+            <div style={{ marginTop: ".25rem", fontSize: ".62rem", color: "var(--text-muted)" }}>
+              Snapshot from {activeDate} · <button
+                onClick={() => selectRun(null)}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text-muted)", textDecoration: "underline", fontSize: "inherit", fontFamily: "inherit" }}
+              >back to latest</button>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Overview card */}
       <div style={{
@@ -85,12 +224,8 @@ export function SingleRepo({ report, breadcrumb, repoUrl }: Props) {
             {(["adopted", "divergent", "partial", "missing"] as const).map((s) => (
               counts[s] > 0 || s === "adopted" || s === "missing" ? (
                 <div key={s} style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "1.25rem", fontWeight: 700, lineHeight: 1, color: `var(--${s}-c)` }}>
-                    {counts[s]}
-                  </div>
-                  <div style={{ fontSize: ".62rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: ".06em", marginTop: ".2rem" }}>
-                    {SM[s].label}
-                  </div>
+                  <div style={{ fontSize: "1.25rem", fontWeight: 700, lineHeight: 1, color: `var(--${s}-c)` }}>{counts[s]}</div>
+                  <div style={{ fontSize: ".62rem", color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: ".06em", marginTop: ".2rem" }}>{SM[s].label}</div>
                 </div>
               ) : null
             ))}
@@ -116,16 +251,15 @@ export function SingleRepo({ report, breadcrumb, repoUrl }: Props) {
         </div>
       </div>
 
-      {/* Coverage formula */}
       <p style={{ fontSize: ".65rem", color: "var(--text-subtle)", marginBottom: "1rem", paddingLeft: ".25rem" }}>
         Coverage = (Adopted + Divergent) ÷ non-N/A skills
       </p>
 
-      {/* Run metrics (collapsed) */}
+      {/* Run metrics */}
       {metrics && (
         <details style={{ marginBottom: "1rem" }}>
           <summary>
-            Run metrics · {withMetrics.length} evaluated{cached > 0 ? ` · ${cached} cached` : ""}
+            Run metrics · {withMetrics.length} evaluated{cachedCount > 0 ? ` · ${cachedCount} cached` : ""}
           </summary>
           <div style={{
             display: "flex", gap: "1.25rem", flexWrap: "wrap",
@@ -136,12 +270,14 @@ export function SingleRepo({ report, breadcrumb, repoUrl }: Props) {
             <span style={{ color: "var(--text-muted)" }}>{metrics.tokens.toLocaleString()} tokens</span>
             <span style={{ color: "var(--text-muted)" }}>${metrics.cost.toFixed(4)}</span>
             <span style={{ color: "var(--text-muted)" }}>{(metrics.ms / 1000).toFixed(1)}s</span>
-            <span style={{ color: "var(--text-subtle)", borderLeft: "1px solid var(--border)", paddingLeft: "1.25rem" }}>~{Math.round(metrics.tokens / withMetrics.length).toLocaleString()} avg tokens/skill · ${(metrics.cost / withMetrics.length).toFixed(4)} avg cost/skill</span>
+            <span style={{ color: "var(--text-subtle)", borderLeft: "1px solid var(--border)", paddingLeft: "1.25rem" }}>
+              ~{Math.round(metrics.tokens / withMetrics.length).toLocaleString()} avg tokens/skill · ${(metrics.cost / withMetrics.length).toFixed(4)} avg cost/skill
+            </span>
           </div>
         </details>
       )}
 
-      {/* Filter row */}
+      {/* Status filter + search row */}
       <div style={{ display: "flex", gap: ".4rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button className={`fbtn${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>
           All ({total})
@@ -171,10 +307,7 @@ export function SingleRepo({ report, breadcrumb, repoUrl }: Props) {
         <p style={{ color: "var(--text-muted)", padding: "1.5rem 0" }}>No skills match the current filter.</p>
       )}
       {visibleResults.map((r, i) => (
-        <div
-          key={r.skillName}
-          className="card"
-          data-s={r.status}
+        <div key={r.skillName} className="card" data-s={r.status}
           style={{ animationDelay: `${(i * 0.025).toFixed(3)}s` }}
         >
           <div className="card-hdr">
@@ -182,18 +315,16 @@ export function SingleRepo({ report, breadcrumb, repoUrl }: Props) {
             <span className="card-name">{r.skillName}</span>
             <span className="badge" data-s={r.status}>{SM[r.status as keyof typeof SM]?.label ?? r.status}</span>
           </div>
-          <div className="reasoning"><p>{r.reasoning}</p></div>
+          {r.reasoning && <div className="reasoning"><p>{r.reasoning}</p></div>}
           {r.evidence.length > 0 && (
             <details>
               <summary>{r.evidence.length} evidence item{r.evidence.length !== 1 ? "s" : ""}</summary>
               <ul className="ev-list">
                 {r.evidence.map((e, j) => {
                   const m = e.match(/^([\w./\-]+\.[a-zA-Z]+(?:\s+lines?\s+[\d\-,]+)?):?\s*(.*)/);
-                  return m ? (
-                    <li key={j} className="ev-item"><span className="ev-file">{m[1]}</span>{m[2] ? ` ${m[2]}` : ""}</li>
-                  ) : (
-                    <li key={j} className="ev-item">{e}</li>
-                  );
+                  return m
+                    ? <li key={j} className="ev-item"><span className="ev-file">{m[1]}</span>{m[2] ? ` ${m[2]}` : ""}</li>
+                    : <li key={j} className="ev-item">{e}</li>;
                 })}
               </ul>
             </details>
@@ -201,7 +332,6 @@ export function SingleRepo({ report, breadcrumb, repoUrl }: Props) {
         </div>
       ))}
 
-      {/* Status guide (reference, at bottom) */}
       <details style={{ marginTop: "1.5rem" }}>
         <summary>Status guide</summary>
         <div style={{
