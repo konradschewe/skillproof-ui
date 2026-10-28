@@ -168,7 +168,6 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
           </div>
           <CoverageChart
             points={chartPoints}
-            height={80}
             latestDate={latestEntry.evaluatedAt}
             selectedDate={selectedIso}
             onSelect={selectRun}

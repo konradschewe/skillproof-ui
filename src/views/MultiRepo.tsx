@@ -169,7 +169,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
                 ))}
               </div>
             </div>
-            <CoverageChart points={chartPoints} height={80} />
+            <CoverageChart points={chartPoints} />
           </div>
         );
       })()}
