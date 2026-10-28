@@ -117,16 +117,29 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
         </button>
       )}
 
-      <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", marginBottom: ".25rem", gap: "1rem", flexWrap: "wrap" }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".25rem", gap: "1rem", flexWrap: "wrap" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>{repoName}</h1>
-        {repoUrl && (
-          <a href={repoUrl} target="_blank" rel="noreferrer"
-            style={{ fontSize: ".78rem", color: "var(--text-muted)", textDecoration: "none", flexShrink: 0 }}>
-            ↗ GitHub
-          </a>
-        )}
+        <div style={{ display: "flex", alignItems: "center", gap: ".5rem", flexShrink: 0 }}>
+          {allSkillNames.length > 1 && (
+            <button
+              className={`fbtn${skillFilterOpen ? " on" : ""}`}
+              onClick={() => setSkillFilterOpen((v) => !v)}
+              style={{ display: "flex", alignItems: "center", gap: ".3rem" }}
+            >
+              Skills
+              {skillBadge > 0 && <span className="skill-badge">{skillBadge} hidden</span>}
+              <span style={{ fontSize: ".6rem", opacity: .6 }}>{skillFilterOpen ? "▲" : "▼"}</span>
+            </button>
+          )}
+          {repoUrl && (
+            <a href={repoUrl} target="_blank" rel="noreferrer"
+              style={{ fontSize: ".78rem", color: "var(--text-muted)", textDecoration: "none" }}>
+              ↗ GitHub
+            </a>
+          )}
+        </div>
       </div>
-      <p style={{ fontSize: ".78rem", color: "var(--text-muted)", marginBottom: sortedHistory.length > 1 ? ".75rem" : "1.25rem" }}>
+      <p style={{ fontSize: ".78rem", color: "var(--text-muted)", marginBottom: ".75rem" }}>
         {repoPath} · {activeDate}
         {activeEntry.sha && (
           <span style={{ fontFamily: "monospace", marginLeft: ".5rem", color: "var(--text-subtle)" }}>
@@ -139,6 +152,21 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
           </span>
         )}
       </p>
+
+      {/* Skill filter panel — at top because it affects chart + all aggregations */}
+      {allSkillNames.length > 1 && skillFilterOpen && (
+        <div style={{
+          background: "var(--surface)", border: "1px solid var(--border)",
+          borderRadius: "var(--r)", padding: ".75rem 1rem",
+          marginBottom: "1rem", boxShadow: "var(--sh)",
+        }}>
+          <SkillFilter
+            allSkills={allSkillNames}
+            selected={selectedSkillNames}
+            onChange={setSelectedSkillNames}
+          />
+        </div>
+      )}
 
       {/* Coverage chart */}
       {sortedHistory.length > 1 && (
@@ -249,21 +277,6 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
         </details>
       )}
 
-      {/* Skill filter panel */}
-      {allSkillNames.length > 1 && skillFilterOpen && (
-        <div style={{
-          background: "var(--surface)", border: "1px solid var(--border)",
-          borderRadius: "var(--r)", padding: ".75rem 1rem",
-          marginBottom: ".75rem", boxShadow: "var(--sh)",
-        }}>
-          <SkillFilter
-            allSkills={allSkillNames}
-            selected={selectedSkillNames}
-            onChange={setSelectedSkillNames}
-          />
-        </div>
-      )}
-
       {/* Status filter + search row */}
       <div style={{ display: "flex", gap: ".4rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button className={`fbtn${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>
@@ -274,18 +287,6 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
             {SM[s].icon} {SM[s].label} ({counts[s]})
           </button>
         ))}
-        {allSkillNames.length > 1 && (
-          <button
-            className={`fbtn${skillFilterOpen ? " on" : ""}`}
-            onClick={() => setSkillFilterOpen((v) => !v)}
-            style={{ display: "flex", alignItems: "center", gap: ".3rem" }}
-          >
-            Skills
-            {skillBadge > 0 && (
-              <span className="skill-badge">{skillBadge} hidden</span>
-            )}
-          </button>
-        )}
         <div className="search" style={{ marginLeft: "auto" }}>
           <svg className="search-ico" viewBox="0 0 16 16" width={12} height={12} fill="none" stroke="currentColor" strokeWidth={1.8}>
             <circle cx={6.5} cy={6.5} r={4.5} />
