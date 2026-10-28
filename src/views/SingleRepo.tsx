@@ -3,13 +3,14 @@ import { S_ORDER, SM } from "../constants";
 import { AppShell } from "../components/AppShell";
 import { CoverageRing } from "../components/DonutChart";
 import { CoverageChart } from "../components/CoverageChart";
-import type { AdoptionStatus, EvaluationReport, HistoryEntry, SkillEvaluationResult } from "../types";
+import { coveragePct } from "../utils";
+import type { HistoryEntry, SkillEvaluationResult } from "../types";
 
 interface Props {
-  report: EvaluationReport;
+  repoPath: string;
+  history: HistoryEntry[]; // sorted oldest → newest; latest = last entry
   breadcrumb?: { label: string; onClick: () => void };
   repoUrl?: string;
-  history?: HistoryEntry[];
 }
 
 const STATUS_DEFS: Record<string, string> = {
@@ -21,24 +22,22 @@ const STATUS_DEFS: Record<string, string> = {
 };
 
 type TimeRange = "1m" | "3m" | "1y" | "all";
+const RANGE_PILLS: TimeRange[] = ["1m", "3m", "1y", "all"];
 
 function cutoffForRange(range: TimeRange): string | null {
   if (range === "all") return null;
-  const ms = range === "1m" ? 30 : range === "3m" ? 90 : 365;
-  return new Date(Date.now() - ms * 86400_000).toISOString();
+  const days = range === "1m" ? 30 : range === "3m" ? 90 : 365;
+  return new Date(Date.now() - days * 86400_000).toISOString();
 }
 
-const RANGE_PILLS: TimeRange[] = ["1m", "3m", "1y", "all"];
-
-export function SingleRepo({ report, breadcrumb, repoUrl, history }: Props) {
+export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
   const [filter, setFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
   const [selectedIso, setSelectedIso] = useState<string | null>(null); // null = latest
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
 
-  const sortedHistory = [...(history ?? [])].sort((a, b) =>
-    a.evaluatedAt.localeCompare(b.evaluatedAt)
-  );
+  const sortedHistory = [...history].sort((a, b) => a.evaluatedAt.localeCompare(b.evaluatedAt));
+  const latestEntry = sortedHistory[sortedHistory.length - 1];
 
   const cutoff = cutoffForRange(timeRange);
   const visibleHistory = cutoff
@@ -56,39 +55,30 @@ export function SingleRepo({ report, breadcrumb, repoUrl, history }: Props) {
     setFilter("all");
   }
 
-  const activeEntry: HistoryEntry | null =
-    selectedIso ? sortedHistory.find((e) => e.evaluatedAt === selectedIso) ?? null : null;
-  const isLatest = activeEntry === null;
+  const activeEntry: HistoryEntry =
+    (selectedIso ? sortedHistory.find((e) => e.evaluatedAt === selectedIso) : undefined)
+    ?? latestEntry;
 
-  const activeResults: SkillEvaluationResult[] = report.results.map((r) => ({
-    ...r,
-    status: activeEntry
-      ? ((activeEntry.skills[r.skillName] ?? r.status) as AdoptionStatus)
-      : r.status,
-    reasoning: isLatest ? r.reasoning : "",
-    evidence:  isLatest ? r.evidence  : [],
-  }));
+  const isLatest = activeEntry.evaluatedAt === latestEntry.evaluatedAt;
 
-  const repoName = report.repoPath.split("/").pop() ?? report.repoPath;
-  const activeDate = activeEntry
-    ? new Date(activeEntry.evaluatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })
-    : new Date(report.evaluatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" });
+  const activeResults: SkillEvaluationResult[] = activeEntry.results;
+  const repoName = repoPath.split("/").pop() ?? repoPath;
+  const activeDate = new Date(activeEntry.evaluatedAt).toLocaleString("en-US", {
+    dateStyle: "medium", timeStyle: "short",
+  });
 
   const counts = Object.fromEntries(
     S_ORDER.map((s) => [s, activeResults.filter((r) => r.status === s).length]),
   ) as Record<string, number>;
   const total = activeResults.length;
   const scored = total - (counts["not-applicable"] || 0);
-  const pct = scored > 0 ? Math.round(((counts.adopted ?? 0) + (counts.divergent ?? 0)) / scored * 100) : 0;
-
-  const latestScored = report.results.length - report.results.filter((r) => r.status === "not-applicable").length;
-  const latestPct = latestScored > 0
-    ? Math.round((report.results.filter((r) => r.status === "adopted" || r.status === "divergent").length / latestScored) * 100)
+  const pct = scored > 0
+    ? Math.round(((counts.adopted ?? 0) + (counts.divergent ?? 0)) / scored * 100)
     : 0;
 
-  const withMetrics = report.results.filter((r) => r.metrics);
-  const cached = report.results.length - withMetrics.length;
-  const metrics = isLatest && withMetrics.length > 0 ? {
+  const withMetrics = activeResults.filter((r) => r.metrics);
+  const cachedCount = activeResults.length - withMetrics.length;
+  const metrics = withMetrics.length > 0 ? {
     tokens: withMetrics.reduce((a, r) => a + r.metrics!.evaluator.inputTokens + r.metrics!.evaluator.outputTokens + r.metrics!.explorer.inputTokens + r.metrics!.explorer.outputTokens, 0),
     cost:   withMetrics.reduce((a, r) => a + r.metrics!.estimatedCostUsd, 0),
     ms:     withMetrics.reduce((a, r) => a + r.metrics!.durationMs, 0),
@@ -120,20 +110,30 @@ export function SingleRepo({ report, breadcrumb, repoUrl, history }: Props) {
           </a>
         )}
       </div>
-      <p style={{ fontSize: ".78rem", color: "var(--text-muted)", marginBottom: sortedHistory.length > 0 ? ".75rem" : "1.25rem" }}>
-        {report.repoPath} · {activeDate}
+      <p style={{ fontSize: ".78rem", color: "var(--text-muted)", marginBottom: sortedHistory.length > 1 ? ".75rem" : "1.25rem" }}>
+        {repoPath} · {activeDate}
+        {activeEntry.sha && (
+          <span style={{ fontFamily: "monospace", marginLeft: ".5rem", color: "var(--text-subtle)" }}>
+            {activeEntry.sha.slice(0, 7)}
+          </span>
+        )}
+        {activeEntry.ref && (
+          <span style={{ marginLeft: ".35rem", color: "var(--text-subtle)" }}>
+            ({activeEntry.ref})
+          </span>
+        )}
       </p>
 
-      {sortedHistory.length > 0 && (
+      {/* Coverage chart — only shown when there are multiple runs */}
+      {sortedHistory.length > 1 && (
         <div style={{
           background: "var(--surface)", border: "1px solid var(--border)",
           borderRadius: "var(--r)", padding: ".4rem .75rem",
           marginBottom: "1rem", boxShadow: "var(--sh)",
         }}>
-          {/* Chart header */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".25rem" }}>
             <span style={{ fontSize: ".6rem", color: "var(--text-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".07em" }}>
-              Coverage · {visibleHistory.length + 1} runs
+              Coverage · {visibleHistory.length} runs
             </span>
             <div style={{ display: "flex", gap: ".2rem" }}>
               {RANGE_PILLS.map((r) => (
@@ -157,30 +157,23 @@ export function SingleRepo({ report, breadcrumb, repoUrl, history }: Props) {
               ))}
             </div>
           </div>
-
           <CoverageChart
             history={visibleHistory}
-            latestPct={latestPct}
-            latestDate={report.evaluatedAt}
             selectedIso={selectedIso}
             onSelect={selectRun}
           />
-
-          {!isLatest && activeEntry && (
-            <div style={{ marginTop: ".25rem", fontSize: ".62rem", color: "var(--text-muted)", display: "flex", gap: ".75rem" }}>
-              <span>{new Date(activeEntry.evaluatedAt).toLocaleString("en-US", { dateStyle: "medium", timeStyle: "short" })}</span>
-              <span style={{ fontFamily: "monospace", color: "var(--text-subtle)" }}>{activeEntry.sha.slice(0, 7)}</span>
+          {!isLatest && (
+            <div style={{ marginTop: ".25rem", fontSize: ".62rem", color: "var(--text-muted)" }}>
+              Snapshot from {activeDate} · <button
+                onClick={() => selectRun(null)}
+                style={{ background: "none", border: "none", padding: 0, cursor: "pointer", color: "var(--text-muted)", textDecoration: "underline", fontSize: "inherit", fontFamily: "inherit" }}
+              >back to latest</button>
             </div>
           )}
         </div>
       )}
 
-      {!isLatest && (
-        <p style={{ fontSize: ".72rem", color: "var(--text-subtle)", marginBottom: "1rem", background: "var(--surface)", border: "1px solid var(--border)", borderRadius: "var(--r-sm)", padding: ".4rem .75rem" }}>
-          Snapshot · reasoning and evidence only available for the latest run
-        </p>
-      )}
-
+      {/* Overview card */}
       <div style={{
         background: "var(--surface)", border: "1px solid var(--border)",
         borderRadius: "var(--r)", padding: ".75rem 1rem",
@@ -228,10 +221,11 @@ export function SingleRepo({ report, breadcrumb, repoUrl, history }: Props) {
         Coverage = (Adopted + Divergent) ÷ non-N/A skills
       </p>
 
+      {/* Run metrics */}
       {metrics && (
         <details style={{ marginBottom: "1rem" }}>
           <summary>
-            Run metrics · {withMetrics.length} evaluated{cached > 0 ? ` · ${cached} cached` : ""}
+            Run metrics · {withMetrics.length} evaluated{cachedCount > 0 ? ` · ${cachedCount} cached` : ""}
           </summary>
           <div style={{
             display: "flex", gap: "1.25rem", flexWrap: "wrap",
@@ -242,11 +236,14 @@ export function SingleRepo({ report, breadcrumb, repoUrl, history }: Props) {
             <span style={{ color: "var(--text-muted)" }}>{metrics.tokens.toLocaleString()} tokens</span>
             <span style={{ color: "var(--text-muted)" }}>${metrics.cost.toFixed(4)}</span>
             <span style={{ color: "var(--text-muted)" }}>{(metrics.ms / 1000).toFixed(1)}s</span>
-            <span style={{ color: "var(--text-subtle)", borderLeft: "1px solid var(--border)", paddingLeft: "1.25rem" }}>~{Math.round(metrics.tokens / withMetrics.length).toLocaleString()} avg tokens/skill · ${(metrics.cost / withMetrics.length).toFixed(4)} avg cost/skill</span>
+            <span style={{ color: "var(--text-subtle)", borderLeft: "1px solid var(--border)", paddingLeft: "1.25rem" }}>
+              ~{Math.round(metrics.tokens / withMetrics.length).toLocaleString()} avg tokens/skill · ${(metrics.cost / withMetrics.length).toFixed(4)} avg cost/skill
+            </span>
           </div>
         </details>
       )}
 
+      {/* Filter row */}
       <div style={{ display: "flex", gap: ".4rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
         <button className={`fbtn${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>
           All ({total})
@@ -271,6 +268,7 @@ export function SingleRepo({ report, breadcrumb, repoUrl, history }: Props) {
         </div>
       </div>
 
+      {/* Skill cards */}
       {visibleResults.length === 0 && (
         <p style={{ color: "var(--text-muted)", padding: "1.5rem 0" }}>No skills match the current filter.</p>
       )}

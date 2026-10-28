@@ -1,9 +1,9 @@
 import type { HistoryEntry } from "../types";
-import { coveragePctFromHistory } from "../utils";
+import { coveragePct } from "../utils";
 
 export function Sparkline({ history }: { history: HistoryEntry[] }) {
   const sorted = [...history].sort((a, b) => a.evaluatedAt.localeCompare(b.evaluatedAt));
-  const pts = sorted.slice(-10).map((e) => coveragePctFromHistory(e.skills));
+  const pts = sorted.slice(-10).map((e) => coveragePct(e.results));
   if (pts.length < 2) return null;
 
   const W = 64, H = 20, PAD = 2;

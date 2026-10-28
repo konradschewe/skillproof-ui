@@ -1,11 +1,5 @@
 import type { HistoryEntry } from "../types";
-import { coveragePctFromHistory } from "../utils";
-
-interface Point {
-  date: string;
-  pct: number;
-  iso: string | null; // null = latest
-}
+import { coveragePct } from "../utils";
 
 const VW = 600, VH = 44;
 const PAD = { top: 5, right: 6, bottom: 11, left: 18 };
@@ -26,32 +20,36 @@ function fmtShort(iso: string) {
 }
 
 interface Props {
-  history: HistoryEntry[];
-  latestPct: number;
-  latestDate: string;
-  selectedIso: string | null;
+  history: HistoryEntry[]; // sorted oldest → newest; last entry = latest
+  selectedIso: string | null; // null = latest
   onSelect: (iso: string | null) => void;
 }
 
-export function CoverageChart({ history, latestPct, latestDate, selectedIso, onSelect }: Props) {
+export function CoverageChart({ history, selectedIso, onSelect }: Props) {
+  if (history.length === 0) return null;
+
   const sorted = [...history].sort((a, b) => a.evaluatedAt.localeCompare(b.evaluatedAt));
+  const latestIso = sorted[sorted.length - 1].evaluatedAt;
 
-  const allPoints: Point[] = [
-    ...sorted.map((e) => ({ date: e.evaluatedAt, pct: coveragePctFromHistory(e.skills), iso: e.evaluatedAt })),
-    { date: latestDate, pct: latestPct, iso: null },
-  ];
+  const points = sorted.map((e) => ({
+    iso: e.evaluatedAt,
+    pct: coveragePct(e.results),
+    isLatest: e.evaluatedAt === latestIso,
+  }));
 
-  const timestamps = allPoints.map((p) => new Date(p.date).getTime());
+  const timestamps = points.map((p) => new Date(p.iso).getTime());
   const minT = timestamps[0], maxT = timestamps[timestamps.length - 1];
 
-  const xs = allPoints.map((p) => xScale(new Date(p.date).getTime(), minT, maxT));
-  const ys = allPoints.map((p) => yScale(p.pct));
+  const xs = points.map((p) => xScale(new Date(p.iso).getTime(), minT, maxT));
+  const ys = points.map((p) => yScale(p.pct));
   const linePath = xs.map((x, i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${ys[i].toFixed(1)}`).join(" ");
 
-  const labelCount = Math.min(4, allPoints.length);
+  const labelCount = Math.min(4, points.length);
   const labelIndices = Array.from({ length: labelCount }, (_, i) =>
-    Math.round((i / (labelCount - 1)) * (allPoints.length - 1))
+    Math.round((i / Math.max(labelCount - 1, 1)) * (points.length - 1))
   );
+
+  const resolvedSelected = selectedIso ?? latestIso;
 
   return (
     <svg
@@ -78,20 +76,20 @@ export function CoverageChart({ history, latestPct, latestDate, selectedIso, onS
       <path d={linePath} fill="none" stroke="var(--border)" strokeWidth={1.5} strokeLinejoin="round" />
 
       {/* Hit areas */}
-      {allPoints.map((p, i) => (
+      {points.map((p, i) => (
         <rect
           key={i}
           x={xs[i] - 8} y={PAD.top}
           width={16} height={CH}
           fill="transparent"
           style={{ cursor: "pointer" }}
-          onClick={() => onSelect(p.iso)}
+          onClick={() => onSelect(p.isLatest ? null : p.iso)}
         />
       ))}
 
       {/* Dots */}
-      {allPoints.map((p, i) => {
-        const isSelected = p.iso === null ? selectedIso === null : selectedIso === p.iso;
+      {points.map((p, i) => {
+        const isSelected = p.iso === resolvedSelected;
         const color = dotColor(p.pct);
         return (
           <circle key={i} cx={xs[i]} cy={ys[i]}
@@ -101,7 +99,7 @@ export function CoverageChart({ history, latestPct, latestDate, selectedIso, onS
             strokeWidth={isSelected ? 0 : 1.5}
             style={{ cursor: "pointer", pointerEvents: "none" }}
           >
-            <title>{fmtShort(p.date)}: {p.pct}%</title>
+            <title>{fmtShort(p.iso)}: {p.pct}%{p.isLatest ? " (latest)" : ""}</title>
           </circle>
         );
       })}
@@ -110,7 +108,7 @@ export function CoverageChart({ history, latestPct, latestDate, selectedIso, onS
       {labelIndices.map((idx) => (
         <text key={idx} x={xs[idx]} y={VH - 1.5}
           fontSize={5.5} fill="var(--text-subtle)" textAnchor="middle">
-          {fmtShort(allPoints[idx].date)}
+          {fmtShort(points[idx].iso)}
         </text>
       ))}
     </svg>
