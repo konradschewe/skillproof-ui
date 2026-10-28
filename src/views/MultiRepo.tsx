@@ -4,6 +4,7 @@ import { AppShell } from "../components/AppShell";
 import { RepoFilter } from "../components/RepoFilter";
 import { SkillFilter } from "../components/SkillFilter";
 import { CoverageRing } from "../components/DonutChart";
+import { Sparkline } from "../components/Sparkline";
 import type { HubResult } from "../types";
 import { relativeTime } from "../utils";
 
@@ -141,6 +142,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
               <tr>
                 <th>Repository</th>
                 <th>Coverage</th>
+                <th>Trend</th>
                 <th className="center">{SM.adopted.icon}</th>
                 <th className="center">{SM.divergent.icon}</th>
                 <th className="center">{SM.partial.icon}</th>
@@ -164,6 +166,11 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
                       </div>
                     </td>
                     <td><CoverageBar covered={covered} total={total} /></td>
+                    <td>
+                      {r.history && r.history.length >= 2
+                        ? <Sparkline history={r.history} />
+                        : <span style={{ color: "var(--text-subtle)", fontSize: ".72rem" }}>—</span>}
+                    </td>
                     <td className="center">
                       {counts.adopted > 0
                         ? <span style={{ color: "var(--adopted-c)", fontWeight: 600 }}>{counts.adopted}</span>

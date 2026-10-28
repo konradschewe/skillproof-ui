@@ -1,4 +1,34 @@
-import type { SkillproofData } from "./types";
+import type { SkillproofData, HistoryEntry } from "./types";
+
+// repo 1: improving over time (0% → 50%)
+const HISTORY_AUDIENCE: HistoryEntry[] = [
+  { sha: "a0b1c2d", evaluatedAt: "2026-08-01T09:00:00Z", skills: { "sap-agent-bootstrap": "missing",  "sap-agent-guardrails": "missing", "sap-agent-instrumentation": "missing", "sap-agent-spii": "missing"  } },
+  { sha: "b1c2d3e", evaluatedAt: "2026-08-15T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted",  "sap-agent-guardrails": "missing", "sap-agent-instrumentation": "missing", "sap-agent-spii": "missing"  } },
+  { sha: "c2d3e4f", evaluatedAt: "2026-09-01T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted",  "sap-agent-guardrails": "partial", "sap-agent-instrumentation": "missing", "sap-agent-spii": "adopted"  } },
+  { sha: "d3e4f5a", evaluatedAt: "2026-09-15T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted",  "sap-agent-guardrails": "partial", "sap-agent-instrumentation": "missing", "sap-agent-spii": "adopted"  } },
+  { sha: "e4f5a6b", evaluatedAt: "2026-10-01T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted",  "sap-agent-guardrails": "partial", "sap-agent-instrumentation": "partial", "sap-agent-spii": "adopted"  } },
+  { sha: "f5a6b7c", evaluatedAt: "2026-10-15T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted",  "sap-agent-guardrails": "partial", "sap-agent-instrumentation": "missing", "sap-agent-spii": "adopted"  } },
+];
+
+// repo 2: consistently fully adopted (100% throughout)
+const HISTORY_CAMPAIGN: HistoryEntry[] = [
+  { sha: "a1b2c3d", evaluatedAt: "2026-08-01T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted", "sap-agent-guardrails": "adopted", "sap-agent-instrumentation": "adopted", "sap-agent-spii": "adopted" } },
+  { sha: "b2c3d4e", evaluatedAt: "2026-08-15T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted", "sap-agent-guardrails": "adopted", "sap-agent-instrumentation": "adopted", "sap-agent-spii": "adopted" } },
+  { sha: "c3d4e5f", evaluatedAt: "2026-09-01T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted", "sap-agent-guardrails": "adopted", "sap-agent-instrumentation": "adopted", "sap-agent-spii": "adopted" } },
+  { sha: "d4e5f6a", evaluatedAt: "2026-09-15T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted", "sap-agent-guardrails": "adopted", "sap-agent-instrumentation": "adopted", "sap-agent-spii": "adopted" } },
+  { sha: "e5f6a7b", evaluatedAt: "2026-10-01T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted", "sap-agent-guardrails": "adopted", "sap-agent-instrumentation": "adopted", "sap-agent-spii": "adopted" } },
+  { sha: "f6a7b8c", evaluatedAt: "2026-10-15T09:00:00Z", skills: { "sap-agent-bootstrap": "adopted", "sap-agent-guardrails": "adopted", "sap-agent-instrumentation": "adopted", "sap-agent-spii": "adopted" } },
+];
+
+// repo 3: stagnating at 25%, regression on guardrails mid-way
+const HISTORY_ORCHESTRATION: HistoryEntry[] = [
+  { sha: "a2b3c4d", evaluatedAt: "2026-08-01T09:00:00Z", skills: { "sap-agent-bootstrap": "divergent", "sap-agent-guardrails": "partial",  "sap-agent-instrumentation": "missing",  "sap-agent-spii": "missing" } },
+  { sha: "b3c4d5e", evaluatedAt: "2026-08-15T09:00:00Z", skills: { "sap-agent-bootstrap": "divergent", "sap-agent-guardrails": "partial",  "sap-agent-instrumentation": "partial",  "sap-agent-spii": "missing" } },
+  { sha: "c4d5e6f", evaluatedAt: "2026-09-01T09:00:00Z", skills: { "sap-agent-bootstrap": "divergent", "sap-agent-guardrails": "partial",  "sap-agent-instrumentation": "partial",  "sap-agent-spii": "missing" } },
+  { sha: "d5e6f7a", evaluatedAt: "2026-09-15T09:00:00Z", skills: { "sap-agent-bootstrap": "divergent", "sap-agent-guardrails": "missing",  "sap-agent-instrumentation": "partial",  "sap-agent-spii": "missing" } },
+  { sha: "e6f7a8b", evaluatedAt: "2026-10-01T09:00:00Z", skills: { "sap-agent-bootstrap": "divergent", "sap-agent-guardrails": "missing",  "sap-agent-instrumentation": "partial",  "sap-agent-spii": "missing" } },
+  { sha: "f7a8b9c", evaluatedAt: "2026-10-15T09:00:00Z", skills: { "sap-agent-bootstrap": "divergent", "sap-agent-guardrails": "missing",  "sap-agent-instrumentation": "partial",  "sap-agent-spii": "missing" } },
+];
 
 const MOCK_SINGLE: SkillproofData = {
   mode: "single",
@@ -50,6 +80,7 @@ const MOCK_MULTI: SkillproofData = {
       sha: "a1b2c3d",
       ref: "refs/heads/main",
       pushedAt: new Date().toISOString(),
+      history: HISTORY_AUDIENCE,
       report: {
         repoPath: "/home/runner/work/cx-ec-audience-identification-agent",
         skillsDir: ".skills",
@@ -68,6 +99,7 @@ const MOCK_MULTI: SkillproofData = {
       sha: "d4e5f6a",
       ref: "refs/heads/main",
       pushedAt: new Date().toISOString(),
+      history: HISTORY_CAMPAIGN,
       report: {
         repoPath: "/home/runner/work/cx-ec-campaign-activation-agent",
         skillsDir: ".skills",
@@ -86,6 +118,7 @@ const MOCK_MULTI: SkillproofData = {
       sha: "b7c8d9e",
       ref: "refs/heads/main",
       pushedAt: new Date().toISOString(),
+      history: HISTORY_ORCHESTRATION,
       report: {
         repoPath: "/home/runner/work/campaign-orchestration-service",
         skillsDir: ".skills",

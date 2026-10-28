@@ -30,6 +30,12 @@ export interface EvaluationReport {
   results: SkillEvaluationResult[];
 }
 
+export interface HistoryEntry {
+  sha: string;
+  evaluatedAt: string;
+  skills: Record<string, AdoptionStatus>;
+}
+
 export interface HubResult {
   repo: string;
   repoUrl: string;
@@ -37,6 +43,7 @@ export interface HubResult {
   ref: string;
   pushedAt: string;
   report: EvaluationReport;
+  history?: HistoryEntry[];
 }
 
 export type SkillproofData =

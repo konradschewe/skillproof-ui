@@ -8,6 +8,13 @@ export function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
+export function coveragePctFromHistory(skills: Record<string, string>): number {
+  const values = Object.values(skills);
+  const applicable = values.filter((s) => s !== "not-applicable");
+  if (!applicable.length) return 0;
+  return Math.round(applicable.filter((s) => s === "adopted" || s === "divergent").length / applicable.length * 100);
+}
+
 export function detectPlugins(skills: string[]): Map<string, string[]> {
   const groups = new Map<string, string[]>();
   for (const skill of skills) {

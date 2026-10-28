@@ -25,6 +25,7 @@ export function App() {
           report={selected.report}
           breadcrumb={{ label: "Hub", onClick: () => setSelected(null) }}
           repoUrl={selected.repoUrl}
+          history={selected.history}
         />
       );
     }
