@@ -5,6 +5,7 @@ import { CoverageRing } from "../components/DonutChart";
 import { CoverageChart } from "../components/CoverageChart";
 import { SkillFilter } from "../components/SkillFilter";
 import { coveragePct } from "../utils";
+import { renderMarkdown, parseInline } from "../markdown";
 import type { HistoryEntry, SkillEvaluationResult } from "../types";
 
 interface Props {
@@ -315,7 +316,7 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
             <span className="card-name">{r.skillName}</span>
             <span className="badge" data-s={r.status}>{SM[r.status as keyof typeof SM]?.label ?? r.status}</span>
           </div>
-          {r.reasoning && <div className="reasoning"><p>{r.reasoning}</p></div>}
+          {r.reasoning && <div className="reasoning">{renderMarkdown(r.reasoning)}</div>}
           {r.evidence.length > 0 && (
             <details>
               <summary>{r.evidence.length} evidence item{r.evidence.length !== 1 ? "s" : ""}</summary>
@@ -323,8 +324,8 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
                 {r.evidence.map((e, j) => {
                   const m = e.match(/^([\w./\-]+\.[a-zA-Z]+(?:\s+lines?\s+[\d\-,]+)?):?\s*(.*)/);
                   return m
-                    ? <li key={j} className="ev-item"><span className="ev-file">{m[1]}</span>{m[2] ? ` ${m[2]}` : ""}</li>
-                    : <li key={j} className="ev-item">{e}</li>;
+                    ? <li key={j} className="ev-item"><span className="ev-file">{m[1]}</span>{m[2] ? <> {parseInline(m[2])}</> : null}</li>
+                    : <li key={j} className="ev-item">{parseInline(e)}</li>;
                 })}
               </ul>
             </details>

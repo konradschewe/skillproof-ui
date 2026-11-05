@@ -159,6 +159,10 @@ a:hover { text-decoration: underline; }
 .reasoning p:last-child { margin-bottom: 0; }
 .reasoning strong { color: var(--text); }
 .reasoning code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: .82em; background: var(--surface-2); border: 1px solid var(--border); border-radius: 3px; padding: .1em .35em; }
+.reasoning ol,
+.reasoning ul { margin: .3rem 0 .45rem 1.35rem; display: flex; flex-direction: column; gap: .15rem; }
+.reasoning li { padding-left: .1rem; }
+.reasoning :last-child { margin-bottom: 0; }
 
 /* ── Badge ─────────────────────────────────────────────── */
 .badge {
@@ -191,6 +195,8 @@ details[open] summary::before { transform: rotate(90deg); }
   color: var(--text-muted); word-break: break-all; line-height: 1.45;
 }
 .ev-file { color: #3b82f6; font-weight: 500; }
+.ev-item code { background: var(--surface); border: 1px solid var(--border); border-radius: 3px; padding: .05em .3em; color: var(--text-2); }
+.ev-item strong { color: var(--text); font-weight: 600; }
 
 /* ── Table (MultiRepo) ─────────────────────────────────── */
 .table-wrap { background: var(--surface); border: 1px solid var(--border); border-radius: var(--r); overflow: hidden; margin-bottom: 1.75rem; box-shadow: var(--sh); }
