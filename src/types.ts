@@ -30,13 +30,19 @@ export interface EvaluationReport {
   results: SkillEvaluationResult[];
 }
 
+export interface HistoryEntry {
+  sha: string;
+  ref?: string;
+  evaluatedAt: string;
+  pushedAt?: string;
+  results: SkillEvaluationResult[];
+}
+
 export interface HubResult {
   repo: string;
   repoUrl: string;
-  sha: string;
-  ref: string;
-  pushedAt: string;
-  report: EvaluationReport;
+  repoPath: string;
+  history: HistoryEntry[]; // sorted oldest → newest; latest = history[history.length - 1]
 }
 
 export type SkillproofData =

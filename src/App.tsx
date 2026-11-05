@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { getData } from "./data";
-import type { HubResult } from "./types";
+import type { HubResult, HistoryEntry } from "./types";
 import { MultiRepo } from "./views/MultiRepo";
 import { SingleRepo } from "./views/SingleRepo";
 
@@ -16,13 +16,21 @@ export function App() {
     );
   }
 
-  if (data.mode === "single") return <SingleRepo report={data.report} />;
+  if (data.mode === "single") {
+    const entry: HistoryEntry = {
+      sha: "",
+      evaluatedAt: data.report.evaluatedAt,
+      results: data.report.results,
+    };
+    return <SingleRepo repoPath={data.report.repoPath} history={[entry]} />;
+  }
 
   if (data.mode === "multi") {
     if (selected) {
       return (
         <SingleRepo
-          report={selected.report}
+          repoPath={selected.repoPath}
+          history={selected.history}
           breadcrumb={{ label: "Hub", onClick: () => setSelected(null) }}
           repoUrl={selected.repoUrl}
         />

@@ -4,17 +4,32 @@ import { AppShell } from "../components/AppShell";
 import { RepoFilter } from "../components/RepoFilter";
 import { SkillFilter } from "../components/SkillFilter";
 import { CoverageRing } from "../components/DonutChart";
-import type { HubResult } from "../types";
-import { relativeTime } from "../utils";
+import { CoverageChart } from "../components/CoverageChart";
+import { Sparkline } from "../components/Sparkline";
+import type { HubResult, HistoryEntry } from "../types";
+import { relativeTime, computeAggregateTimeline } from "../utils";
+
+type TimeRange = "1m" | "3m" | "1y" | "all";
+const RANGE_PILLS: TimeRange[] = ["1m", "3m", "1y", "all"];
+
+function cutoffForRange(range: TimeRange): string | null {
+  if (range === "all") return null;
+  const days = range === "1m" ? 30 : range === "3m" ? 90 : 365;
+  return new Date(Date.now() - days * 86400_000).toISOString();
+}
+
+function latest(r: HubResult): HistoryEntry {
+  return r.history[r.history.length - 1];
+}
 
 function allSkills(results: HubResult[]): string[] {
   const skills = new Set<string>();
-  for (const r of results) r.report.results.forEach((s) => skills.add(s.skillName));
+  for (const r of results) latest(r).results.forEach((s) => skills.add(s.skillName));
   return [...skills].sort();
 }
 
 function repoCoverage(result: HubResult, skills: string[]) {
-  const evaluated = result.report.results.filter((r) => skills.includes(r.skillName));
+  const evaluated = latest(result).results.filter((r) => skills.includes(r.skillName));
   const applicable = evaluated.filter((r) => r.status !== "not-applicable");
   const covered = applicable.filter((r) => r.status === "adopted" || r.status === "divergent").length;
   const counts = {
@@ -47,11 +62,12 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
   const [selectedRepos, setSelectedRepos] = useState<Set<string>>(new Set(allRepos));
   const [selectedSkills, setSelectedSkills] = useState<Set<string>>(new Set(skills));
   const [filterOpen, setFilterOpen] = useState(false);
+  const [timeRange, setTimeRange] = useState<TimeRange>("all");
 
   const visibleSkills = skills.filter((s) => selectedSkills.has(s));
   const visibleRepos = results
     .filter((r) => selectedRepos.has(r.repo))
-    .filter((r) => visibleSkills.some((s) => r.report.results.find((x) => x.skillName === s)))
+    .filter((r) => visibleSkills.some((s) => latest(r).results.find((x) => x.skillName === s)))
     .sort((a, b) => a.repo.localeCompare(b.repo));
 
   const totalApplicable = visibleRepos.reduce((sum, r) => sum + repoCoverage(r, visibleSkills).total, 0);
@@ -69,7 +85,6 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
 
   return (
     <AppShell>
-      {/* Title + filter toggle */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".75rem", flexWrap: "wrap", gap: ".5rem" }}>
         <h1 style={{ fontSize: "1.1rem", fontWeight: 700 }}>Hub</h1>
         <button
@@ -83,7 +98,6 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
         </button>
       </div>
 
-      {/* Inline filter panel — two columns, expands inline */}
       {filterOpen && (
         <div style={{
           display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem",
@@ -106,7 +120,6 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
         </div>
       )}
 
-      {/* Summary bar: counts + coverage ring */}
       <div style={{
         display: "flex", alignItems: "center", gap: "1.25rem", flexWrap: "wrap",
         padding: ".6rem .875rem",
@@ -127,7 +140,40 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
         </span>
       </div>
 
-      {/* Table */}
+      {/* Aggregate coverage chart */}
+      {(() => {
+        const cutoff = cutoffForRange(timeRange);
+        const chartPoints = computeAggregateTimeline(visibleRepos, visibleSkills, cutoff);
+        if (chartPoints.length < 2) return null;
+        return (
+          <div style={{
+            background: "var(--surface)", border: "1px solid var(--border)",
+            borderRadius: "var(--r)", padding: ".4rem .75rem",
+            marginBottom: "1rem", boxShadow: "var(--sh)",
+          }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: ".25rem" }}>
+              <span style={{ fontSize: ".6rem", color: "var(--text-subtle)", fontWeight: 600, textTransform: "uppercase", letterSpacing: ".07em" }}>
+                Coverage trend · {visibleRepos.length} repos · {visibleSkills.length} skills
+              </span>
+              <div style={{ display: "flex", gap: ".2rem" }}>
+                {RANGE_PILLS.map((r) => (
+                  <button key={r} onClick={() => setTimeRange(r)} style={{
+                    background: timeRange === r ? "var(--text)" : "none",
+                    color: timeRange === r ? "var(--bg)" : "var(--text-subtle)",
+                    border: "1px solid var(--border)", borderRadius: "3px",
+                    padding: "1px 5px", fontSize: ".58rem", cursor: "pointer",
+                    fontFamily: "inherit", lineHeight: 1.4,
+                  }}>
+                    {r}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <CoverageChart points={chartPoints} />
+          </div>
+        );
+      })()}
+
       {visibleRepos.length === 0 ? (
         <p style={{ color: "var(--text-muted)", padding: "1.5rem 0" }}>
           {results.length === 0
@@ -141,6 +187,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
               <tr>
                 <th>Repository</th>
                 <th>Coverage</th>
+                <th>Trend</th>
                 <th className="center">{SM.adopted.icon}</th>
                 <th className="center">{SM.divergent.icon}</th>
                 <th className="center">{SM.partial.icon}</th>
@@ -151,6 +198,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
             <tbody>
               {visibleRepos.map((r) => {
                 const { covered, total, counts } = repoCoverage(r, visibleSkills);
+                const lat = latest(r);
                 return (
                   <tr key={r.repo}>
                     <td>
@@ -164,6 +212,11 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
                       </div>
                     </td>
                     <td><CoverageBar covered={covered} total={total} /></td>
+                    <td>
+                      {r.history.length >= 2
+                        ? <Sparkline history={r.history} />
+                        : <span style={{ color: "var(--text-subtle)", fontSize: ".72rem" }}>—</span>}
+                    </td>
                     <td className="center">
                       {counts.adopted > 0
                         ? <span style={{ color: "var(--adopted-c)", fontWeight: 600 }}>{counts.adopted}</span>
@@ -185,7 +238,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
                         : <span className="count-zero">—</span>}
                     </td>
                     <td style={{ color: "var(--text-muted)", fontSize: ".8rem" }}>
-                      {relativeTime(r.report.evaluatedAt)}
+                      {relativeTime(lat.evaluatedAt)}
                     </td>
                   </tr>
                 );
