@@ -218,6 +218,18 @@ const MOCK_SINGLE: SkillproofData = {
         metrics: mkMetrics(129598, 6083, 78752),
       },
       {
+        skillName: "sap-agent-run-local",
+        status: "partial",
+        reasoning: "The `sap-agent-run-local` skill prescribes specific deliverables for running an agent locally:\n\n1. **`templates/.env.local` (or `app/.env.local`)**: The repo uses `.env.harness.example` (not `app/.env.local`) as the environment template. It contains the `AICORE_*` variables but lacks `DEV_TENANT_ID`, `DEV_SUBJECT_ID`, and `OTEL_SDK_DISABLED` — variables explicitly required by the skill for local testing (principal setup and silencing OTel noise).\n\n2. **`Dockerfile.local`**: Absent. The repo has only a standard `Dockerfile` (FROM harness image), not a `Dockerfile.local` for local builds as prescribed by the skill.\n\n3. **`compose.yaml` for local development**: Present and functional — multi-service compose setup (agent + otel-collector + jaeger + mcp-mock) with port 9090 for agent, port 16686 for Jaeger traces. This covers the Docker-based local run scenario partially.\n\n4. **Helper scripts** (`install_deps.sh`, `check_env.py`, `test_aicore.py`, etc.): Absent. These are skill-provided scripts, not repo deliverables — but the repo doesn't adopt them either.\n\n5. **`.env.harness` approach vs `.env.local` approach**: The repo uses `.env.harness` (loaded via `compose.yaml`) rather than `app/.env.local`. This is a different pattern from what the skill prescribes.\n\nKey missing behaviors:\n- No `Dockerfile.local` for the local Docker build pattern\n- No `app/.env.local` template with `DEV_TENANT_ID`/`DEV_SUBJECT_ID` for local A2A testing without auth\n- No `OTEL_SDK_DISABLED` flag in any local run config (though Jaeger is wired in compose.yaml which is an alternative)\n\nWhat IS present: `compose.yaml` for local Docker-based development, `AICORE_*` vars in `.env.harness.example`, Jaeger tracing infrastructure. The local run infrastructure exists but follows a harness-specific pattern (compose-based) rather than the venv/Dockerfile.local pattern the skill prescribes. The principal setup for local testing (`DEV_TENANT_ID`/`DEV_SUBJECT_ID`) is missing.",
+        evidence: [
+          "compose.yaml: present with agent + otel-collector + jaeger + mcp-mock services",
+          ".env.harness.example: contains AICORE_* variables but missing DEV_TENANT_ID, DEV_SUBJECT_ID, OTEL_SDK_DISABLED",
+          "No Dockerfile.local found — only a standard Dockerfile",
+          "No app/.env.local or templates/.env.local found",
+        ],
+        metrics: mkMetrics(98000, 3200, 44000),
+      },
+      {
         skillName: "sap-agent-spii",
         status: "not-applicable",
         reasoning: "This repository is a consuming agent built on the AAFS Pydantic Harness. According to the ADR documented in `docs/design/adr/technical-readiness-spii.md`, SPII endpoint handling is intentionally delegated entirely to the pydantic-harness base image.\n\nThe skill requires:\n- `app/api/spii.py` with `create_client` from `sap-internal-sdk` → not present (handled by harness)\n- `sap-internal-sdk` in requirements.txt/pyproject.toml → not present\n- `tests/test_spii_setup.py` → not present\n- `main.py` importing `create_spii_routes` → not present\n\nNone of these are present because the harness base image owns all SPII infrastructure. This is consistent with the additional context that this repository does not contain any runtime Python code of its own.",
