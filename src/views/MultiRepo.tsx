@@ -131,7 +131,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
           {visibleRepos.length} {visibleRepos.length === 1 ? "repo" : "repos"} · {visibleSkills.length} skills
         </span>
         <span style={{ width: 1, height: "1em", background: "var(--border)", flexShrink: 0 }} />
-        {totalAdopted > 0   && <span style={{ color: "var(--adopted-c)" }}>{SM.adopted.icon} {totalAdopted}</span>}
+        {totalAdopted > 0   && <span style={{ color: "var(--text-subtle)", fontSize: ".75rem" }}>{SM.adopted.icon} {totalAdopted}</span>}
         {totalDivergent > 0 && <span style={{ color: "var(--divergent-c)" }}>{SM.divergent.icon} {totalDivergent}</span>}
         {totalPartial > 0   && <span style={{ color: "var(--partial-c)" }}>{SM.partial.icon} {totalPartial}</span>}
         {totalMissing > 0   && <span style={{ color: "var(--missing-c)", fontWeight: 600 }}>{SM.missing.icon} {totalMissing}</span>}
@@ -188,7 +188,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
                 <th>Repository</th>
                 <th>Coverage</th>
                 <th>Trend</th>
-                <th className="center">{SM.adopted.icon}</th>
+                <th className="center" style={{ color: "var(--text-subtle)", fontWeight: 400 }}>{SM.adopted.icon}</th>
                 <th className="center">{SM.divergent.icon}</th>
                 <th className="center">{SM.partial.icon}</th>
                 <th className="center">{SM.missing.icon}</th>
@@ -219,7 +219,7 @@ export function MultiRepo({ results, onSelectRepo }: { results: HubResult[]; onS
                     </td>
                     <td className="center">
                       {counts.adopted > 0
-                        ? <span style={{ color: "var(--adopted-c)", fontWeight: 600 }}>{counts.adopted}</span>
+                        ? <span style={{ color: "var(--text-subtle)", fontSize: ".75rem" }}>{counts.adopted}</span>
                         : <span className="count-zero">—</span>}
                     </td>
                     <td className="center">

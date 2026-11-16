@@ -33,7 +33,7 @@ function cutoffForRange(range: TimeRange): string | null {
 }
 
 export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
-  const [filter, setFilter] = useState<string>("all");
+  const [filterSet, setFilterSet] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const [selectedIso, setSelectedIso] = useState<string | null>(null);
   const [timeRange, setTimeRange] = useState<TimeRange>("all");
@@ -51,13 +51,13 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
 
   function selectRun(iso: string | null) {
     setSelectedIso(iso);
-    setFilter("all");
+    setFilterSet(new Set());
   }
 
   function changeRange(range: TimeRange) {
     setTimeRange(range);
     setSelectedIso(null);
-    setFilter("all");
+    setFilterSet(new Set());
   }
 
   const activeEntry: HistoryEntry =
@@ -99,11 +99,13 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
     ms:     withMetrics.reduce((a, r) => a + r.metrics!.durationMs, 0),
   } : null;
 
+const URGENCY: Record<string, number> = { missing: 0, partial: 1, divergent: 2, adopted: 3, "not-applicable": 4 };
+
   const visibleResults = activeResults.filter(
     (r) =>
-      (filter === "all" || r.status === filter) &&
+      (filterSet.size === 0 || filterSet.has(r.status)) &&
       (!search || r.skillName.toLowerCase().includes(search.toLowerCase())),
-  );
+  ).sort((a, b) => (URGENCY[a.status] ?? 9) - (URGENCY[b.status] ?? 9));
 
   const skillBadge = allSkillNames.length - selectedSkillNames.size;
 
@@ -280,11 +282,17 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
 
       {/* Status filter + search row */}
       <div style={{ display: "flex", gap: ".4rem", alignItems: "center", marginBottom: "1rem", flexWrap: "wrap" }}>
-        <button className={`fbtn${filter === "all" ? " on" : ""}`} onClick={() => setFilter("all")}>
+        <button className={`fbtn${filterSet.size === 0 ? " on" : ""}`} onClick={() => setFilterSet(new Set())}>
           All ({total})
         </button>
-        {S_ORDER.filter((s) => counts[s] > 0).map((s) => (
-          <button key={s} className={`fbtn${filter === s ? " on" : ""}`} onClick={() => setFilter(s)}>
+        {(["missing", "partial", "divergent", "adopted", "not-applicable"] as const).filter((s) => counts[s] > 0).map((s) => (
+          <button key={s} className={`fbtn${filterSet.has(s) ? " on" : ""}`} onClick={() => {
+            setFilterSet((prev) => {
+              const next = new Set(prev);
+              next.has(s) ? next.delete(s) : next.add(s);
+              return next;
+            });
+          }}>
             {SM[s].icon} {SM[s].label} ({counts[s]})
           </button>
         ))}
@@ -309,7 +317,7 @@ export function SingleRepo({ repoPath, history, breadcrumb, repoUrl }: Props) {
       )}
       {visibleResults.map((r, i) => (
         <div key={r.skillName} className="card" data-s={r.status}
-          style={{ animationDelay: `${(i * 0.025).toFixed(3)}s` }}
+          style={{ animationDelay: `${(i * 0.025).toFixed(3)}s`, opacity: r.status === "adopted" ? 0.5 : 1 }}
         >
           <div className="card-hdr">
             <span className="card-ico">{SM[r.status as keyof typeof SM]?.icon}</span>
